@@ -1,4 +1,4 @@
-module Types where
+module Models.Types where
 
 newtype Coefficients =
   Coefficients (Float, Float)

@@ -1,6 +1,6 @@
-module DataReader.DataReader where
+module DataParser.DataReader where
     
-import Data.Matrix as M ( Matrix, fromList, getCol, toList )
+import Data.Matrix as M 
 import qualified Data.Vector as V
 import Data.Foldable as F
 import Data.Maybe
@@ -37,11 +37,13 @@ group at AT&T research labs (thanks to Yann Le Cunn).
 
 --}
 -- Function to read the file and parse the data
-readImages :: FilePath -> IO [(Int, Matrix Double)]
+readImages :: FilePath -> IO ([Int], [Matrix Double])
 readImages filePath = do
     contents <- readFile filePath
     let linesOfData = lines contents
-    return [parseLine line | line <- linesOfData]
+        parsedData = [parseLine line | line <- linesOfData]
+        (labels, matrices) = unzip parsedData
+    return (labels, matrices)
 
 -- Helper function that will take in a column and add 1 every time it goes from almost fully white to almost fully black
 -- if a pixel is white then it will be -1, if black it will be 1. 
@@ -73,24 +75,29 @@ parseLineOneFive line =
         number = round (Prelude.head values) :: Int
         pixels = M.fromList 16 16 (Prelude.tail values)
     in case number of
-        1 -> Just (number, features pixels)
-        5 ->Just (number, features pixels)
+        1 -> Just (-1, features pixels)
+        5 ->Just (1, features pixels)
         _ -> Nothing
 
-readImagesOneFive :: FilePath -> IO [(Int, Matrix Double)]
+
+-- Function to read the file and parse the data
+readImagesOneFive:: FilePath -> IO ([Int], [Matrix Double])
 readImagesOneFive filePath = do
     contents <- readFile filePath
     let linesOfData = lines contents
-    return $ Data.Maybe.mapMaybe parseLineOneFive linesOfData
+        parsedData = Data.Maybe.mapMaybe parseLineOneFive linesOfData
+        (labels, matrices) = unzip parsedData
+    return (labels, matrices)
 
 printResults :: IO ()
 printResults = do
-    onefive <- readImagesOneFive "ZipDigits.txt"
-    let one = [(a, M.toList b) | (a, b) <- onefive, a == 1]
-    let five = [(a, M.toList b) | (a, b) <- onefive, a == 5]
+    (labels, matrices) <- readImagesOneFive "ZipDigits.txt"
+    let one = [(a, M.toList b) | (a, b) <- zip labels matrices, a == 1]
+    let five = [(a, M.toList b) | (a, b) <- zip labels matrices,  a == 5]
     
     let oneResults = unlines (map show one)
     let fiveResults = unlines (map show five)
     
     writeFile "results.txt" (oneResults ++ fiveResults)
+
 
