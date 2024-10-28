@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-def plot_data(filename):
+def plot_data(filename, title, a, b, c):
     # Initialize lists to store x and y coordinates
     x_values = []
     y_values = []
@@ -34,18 +34,25 @@ def plot_data(filename):
     # Convert lists to numpy arrays for easy indexing
     x_values = np.array(x_values)
     y_values = np.array(y_values)
+    labels = np.array(labels)
+
+    # Determine if each point is above or below the line ax + by + c = 0
+    above_line = a * x_values + b * y_values + c > 0
+
+    # Calculate the error percentage
+    total_points = len(x_values)
+    misclassified_points = np.sum((labels == 1) & above_line) + np.sum((labels == 5) & ~above_line)
+    error_percentage = (misclassified_points / total_points) * 100
+    print(f"Error Percentage: {error_percentage:.2f}%")
 
     # Create the plot
     plt.figure(figsize=(10, 6))
     
-    # Plot points
-    plt.scatter(x_values[np.array(labels) == 1], y_values[np.array(labels) == 1], color='blue', label='1s', marker='o')
-    plt.scatter(x_values[np.array(labels) == 5], y_values[np.array(labels) == 5], color='red', label='5s', marker='x')
+    # Plot points based on their labels, without changing the original colors or markers
+    plt.scatter(x_values[labels == 1], y_values[labels == 1], color='blue', label='1s', marker='o')
+    plt.scatter(x_values[labels == 5], y_values[labels == 5], color='red', label='5s', marker='x')
 
-    # Plot the line c + ax + by = 0
-    c, a, b = -0.9872100065017031,0.04116386224311976,0.0006739910464001116  # Example coefficients
-    a1, b1, c1 = 1, 66, -28
-    print(a1*a+b1*b+c1*c)
+    # Plot the line ax + by + c = 0
     x_line = np.linspace(np.min(x_values), np.max(x_values), 100)
     y_line = -(a / b) * x_line - (c / b)
     plt.plot(x_line, y_line, color='green', label=f'{a}x + {b}y + {c} = 0')
@@ -55,7 +62,7 @@ def plot_data(filename):
     plt.ylim(np.min(y_values), np.max(y_values))
 
     # Add labels and legend
-    plt.title('Scatter Plot of Data Points')
+    plt.title(f'{title} (Error: {error_percentage:.2f}%)')
     plt.xlabel('Overlaps')
     plt.ylabel('Symmetry')
     plt.axhline(0, color='grey', lw=0.5)
@@ -67,5 +74,16 @@ def plot_data(filename):
     plt.show()
 
 if __name__ == '__main__':
-    plot_data("results.txt")
+    #Linear Regression no inter
+    c, a, b = -0.9872100065017031, 0.04116386224311976, 0.0006739910464001116
+    plot_data("results.txt","Linear Regression no inter", a, b, c)
+    #"Linear Regression"
+    c, a, b = 1.0127899934982967, 1061.0411638622431, 229.7356739910465
+    plot_data("results.txt","Linear Regression", a, b, c)
+    
+    #"Linear Regression pocket"
+    c, a, b = -118.9872100065017,  2184.041163862243,  276.0296739910457
+    plot_data("results.txt","Linear Regression pocket", a, b, c)
+
+
     exit(0)
