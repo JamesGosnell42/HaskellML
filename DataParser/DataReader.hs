@@ -2,9 +2,11 @@ module DataParser.DataReader where
     
 import Data.Matrix as M 
 import qualified Data.Vector as V
+import Data.List as D
 import Data.Foldable as F
 import Data.Maybe
 import System.IO
+import System.Random (randomRIO)
 
 {--
 Normalized handwritten digits, automatically
@@ -37,14 +39,14 @@ group at AT&T research labs (thanks to Yann Le Cunn).
 
 --}
 -- Function to read the file and parse the data
-readImages :: FilePath -> IO ([Int], [Matrix Double])
+readImages :: FilePath -> IO (Matrix Double, Matrix Double)
 readImages filePath = do
     contents <- readFile filePath
     let linesOfData = lines contents
         parsedData = [parseLine line | line <- linesOfData]
         (labels, matrices) = unzip parsedData
-    return (labels, matrices)
-
+    return (fromLists labels, fromLists matrices)
+    
 -- Helper function that will take in a column and add 1 every time it goes from almost fully white to almost fully black
 -- if a pixel is white then it will be -1, if black it will be 1. 
 overlaps :: [Double] -> Double
@@ -55,49 +57,153 @@ overlaps (x1:x2:xs)  =
     in (if isOverlap then 1 else 0) + overlaps (x2:xs) 
 
 -- Helper Function to compute features for a matrix of pixels
-features :: Matrix Double -> Matrix Double
+features :: Matrix Double -> [Double]
 features pixels = 
     let overlapSum = F.sum [overlaps y | z <- [1..16], let y = V.toList $ getCol z pixels]
         intensitySum = F.sum [F.sum y | z <- [1..16], let y = V.toList $ getCol z pixels]
-    in M.fromList 2 1 [overlapSum, intensitySum]
+    in  [1, overlapSum, intensitySum] -- 1 is the bias weight.
 
 -- Helper function to parse each line
-parseLine :: String -> (Int, Matrix Double)
+parseLine :: String -> ([Double], [Double])
 parseLine line =
     let values = Prelude.map read $ words line :: [Double]
-        number = round (Prelude.head values) :: Int
+        number = Prelude.head values
         pixels = M.fromList 16 16 (Prelude.tail values)
-    in (number, features pixels)
+    in ([number], features pixels)
 
-parseLineOneFive :: String -> Maybe (Int, Matrix Double)
-parseLineOneFive line =
+parseLineOneAll :: String -> Maybe ([Double], [Double])
+parseLineOneAll line =
     let values = Prelude.map read $ words line :: [Double]
-        number = round (Prelude.head values) :: Int
+        number = Prelude.head values
         pixels = M.fromList 16 16 (Prelude.tail values)
     in case number of
-        1 -> Just (-1, features pixels)
-        5 ->Just (1, features pixels)
-        _ -> Nothing
+        1 -> Just ([1], features pixels)
+        _ ->Just ([-1], features pixels)
 
 
 -- Function to read the file and parse the data
-readImagesOneFive:: FilePath -> IO ([Int], [Matrix Double])
-readImagesOneFive filePath = do
+readImagesOneAll :: FilePath -> Int -> IO ((Matrix Double, Matrix Double), (Matrix Double, Matrix Double))
+readImagesOneAll filePath samplen = do
     contents <- readFile filePath
     let linesOfData = lines contents
-        parsedData = Data.Maybe.mapMaybe parseLineOneFive linesOfData
-        (labels, matrices) = unzip parsedData
-    return (labels, matrices)
+        totalLines = length linesOfData
 
-printResults :: IO ()
-printResults = do
-    (labels, matrices) <- readImagesOneFive "ZipDigits.txt"
-    let one = [(a, M.toList b) | (a, b) <- zip labels matrices, a == 1]
-    let five = [(a, M.toList b) | (a, b) <- zip labels matrices,  a == 5]
+    -- Generate unique random indices
+    randomIndices <- generateUniqueRandomIndices samplen totalLines
+
+    -- Select sample lines based on random indices
+    let selectedLines = [linesOfData !! i | i <- randomIndices]
+        remainingIndices = [0..totalLines-1] \\ randomIndices
+        remainingLines = [linesOfData !! i | i <- remainingIndices]
+
+    -- Parse the data
+    let parsedSampleData = Data.Maybe.mapMaybe parseLineOneAll selectedLines
+        parsedRemainingData = Data.Maybe.mapMaybe parseLineOneAll remainingLines
+        (sampleLabels, sampleMatrices) = unzip parsedSampleData
+        (remainingLabels, remainingMatrices) = unzip parsedRemainingData
+
+    return ((fromLists sampleLabels, fromLists sampleMatrices), (fromLists remainingLabels, fromLists remainingMatrices))
+
+-- Generate a list of unique random indices
+generateUniqueRandomIndices :: Int -> Int -> IO [Int]
+generateUniqueRandomIndices n maxIndex = do
+    indices <- sequence $ replicate n (randomRIO (0, maxIndex - 1))
+    return $ take n $ nub indices
+
+printResults ::  (Matrix Double, Matrix Double) -> FilePath ->IO ()
+printResults (labels, matrices) outfilePath = do 
+    let one = [(a, b) | (a, b) <- zip (M.toList labels) (M.toLists matrices), a == 1]
+    let other = [(a, b) | (a, b) <- zip (M.toList labels) (M.toLists matrices), a == -1]
     
     let oneResults = unlines (map show one)
-    let fiveResults = unlines (map show five)
+    let otherResults = unlines (map show other)
     
-    writeFile "results.txt" (oneResults ++ fiveResults)
+    writeFile outfilePath (oneResults ++ otherResults)
 
+{--
+take in some data and a degree to turn it into and return that degree.
+Φ3(x) = (x1, x2, x1^2, x1x2, x2^2, x1^3, (x1^2)x2, x1(x2^2), x2^3),
+--}
 
+polytransform2to3 :: (Matrix Double, Matrix Double) -> (Matrix Double, Matrix Double)
+polytransform2to3 (ys, xs) = 
+    let (nys, nxs) = polytransform2to3list (M.toLists ys) (M.toLists xs)
+    in (M.fromLists nys, M.fromLists nxs)
+
+polytransform2to3list :: [[Double]] -> [[Double]] -> ([[Double]], [[Double]])
+polytransform2to3list [] _ = ([], [])
+polytransform2to3list _ [] = ([], [])
+polytransform2to3list (y:ys) (x:xs) = case x of
+    (1:x1:x2:[]) -> 
+        let (yn, xn) = polytransform2to3list ys xs 
+            third = [1, x1, x2, x1 * x1, x1 * x2, x2 * x2, x1 * x1 * x1, x1 * x1 * x2, x1 * x2 * x2, x2 * x2 * x2]
+        in (y:yn, third:xn)
+    _ -> error "not second order"
+
+normalizeFeatures :: (Matrix Double, Matrix Double) -> (Matrix Double, Matrix Double)
+normalizeFeatures (labels, features) =
+    let numCols = ncols features
+        normalizedFeatures = foldl normalizeColumn features [2..numCols] -- Start from the second column
+    in (labels, normalizedFeatures)
+  where
+    normalizeColumn :: Matrix Double -> Int -> Matrix Double
+    normalizeColumn mat colIdx =
+        let col = getCol colIdx mat
+            minVal = minimum col
+            maxVal = maximum col
+            shift = (maxVal + minVal) / 2
+            scale = (maxVal - minVal) / 2
+            normalizeValue x = (x - shift) / scale
+        in mapCol (\_ x -> normalizeValue x) colIdx mat
+
+pseudoInverse :: Matrix Double -> Double -> Matrix Double
+pseudoInverse matrix 0=
+    case inverse (multStd (M.transpose matrix) matrix) of
+        Right invMat -> multStd invMat (M.transpose matrix)
+        Left err-> zero (ncols matrix) (nrows matrix)
+pseudoInverse matrix lambda=
+    case inverse (M.elementwise (+) (multStd (M.transpose matrix) matrix) (M.scaleMatrix lambda (identity (nrows matrix)))) of
+        Right invMat -> multStd invMat (M.transpose matrix)
+        Left err-> zero (ncols matrix) (nrows matrix)
+
+-- Function to initialize weights using the pseudoinverse algorithm (w = (XTX)-1XTY)
+initializeWeights :: (Matrix Double, Matrix Double) -> Double -> Matrix Double
+initializeWeights (labels, matrices) lambda=
+    let  xPseudoInv = pseudoInverse matrices lambda
+    in  multStd xPseudoInv labels
+
+-- Calculate the k-th order Legendre polynomial at x
+legendre :: Int -> Double -> Double
+legendre 0 _ = 1
+legendre 1 x = x
+legendre k x = ((2 * fromIntegral k - 1) * x * legendre (k - 1) x - (fromIntegral k - 1) * legendre (k - 2) x) / fromIntegral k
+
+-- Orthogonal polynomial transform using Legendre polynomials
+polyTransformOrthogonal :: Int -> (Matrix Double, Matrix Double) -> (Matrix Double, Matrix Double)
+polyTransformOrthogonal degree (ys, xs) = 
+    let (nys, nxs) = polyTransformOrthogonalList degree (M.toLists ys) (M.toLists xs)
+    in (M.fromLists nys, M.fromLists nxs)
+
+polyTransformOrthogonalList :: Int -> [[Double]] -> [[Double]] -> ([[Double]], [[Double]])
+polyTransformOrthogonalList _ [] _ = ([], [])
+polyTransformOrthogonalList _ _ [] = ([], [])
+polyTransformOrthogonalList degree (y:ys) (x:xs) = case x of
+    (1:x1:x2:[]) -> 
+        let (yn, xn) = polyTransformOrthogonalList degree ys xs 
+            transformed = orthogonalFeatures degree x1 x2
+        in (y:yn, transformed:xn)
+    _ -> error "not second order"
+
+-- Generate orthogonal features using Legendre polynomials up to the given degree
+orthogonalFeatures :: Int -> Double -> Double -> [Double]
+orthogonalFeatures degree x1 x2 = concatMap (\d -> legendreFeatures d x1 x2) [0..degree]
+
+-- Generate Legendre polynomial features for a given degree
+legendreFeatures :: Int -> Double -> Double -> [Double]
+legendreFeatures 0 _ _ = [1]
+legendreFeatures 1 x1 x2 = [legendre 1 x1, legendre 1 x2]
+legendreFeatures d x1 x2 = 
+    let l1 = legendre d x1
+        l2 = legendre d x2
+        crossTerms = [legendre i x1 * legendre (d - i) x2 | i <- [0..d]]
+    in l1 : l2 : crossTerms

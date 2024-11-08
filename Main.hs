@@ -1,43 +1,83 @@
 {-# OPTIONS_GHC -Wall #-}
 module Main where
 import Data.Matrix as M
-import Models.Types
+import Data.List as D
 import Models.LinearModel
+import Models.LogisticModel
 import DataParser.DataReader
-import Data.List
 
 main :: IO ()
 main = do
-    dat <- readImagesOneFive "ZipDigits.txt" -- Extract the value from the IO action
-    let datfin = addBiases dat
-    let weights = initializeWeights datfin
 
-    -- Run the linear regression pocket and regular linear regression
-    weightsLRP <- linearRegressionPocket weights datfin 1000
-    weightsLR <- linearRegression weights datfin 1000
-    weightsGD <- gradientDescent weights datfin 1000
-    weightsSGD <- stochasticGradientDescent weights datfin 1000
 
-    -- Print results for linear regression without pocket
-    putStrLn "Linear Regression no inter"
-    print (M.transpose weights)
-    print (errorCalc weights (snd datfin) (fst datfin))
+    (datnn, dattest) <- readImagesOneAll "ZipDigitsFull.txt" 300
+    let dat8th = polyTransformOrthogonal 8 (normalizeFeatures datnn)
+    let dattest8th =polyTransformOrthogonal 8 (normalizeFeatures dattest)
+    
+    printResults dat8th "resultsFullOrder.txt" 
+    printResults dattest8th "resultsFullOrdertest.txt" 
 
-    -- Print results for linear regression with pocket
-    putStrLn "Linear Regression pocket"
-    print (M.transpose weightsLRP)
-    print (errorCalc weightsLRP (snd datfin) (fst datfin))
+    print ("dat8th row #: " D.++ (show$nrows$snd dat8th) D.++ " dat8th col #: " D.++ (show$ncols$snd dat8th) )
+    
+    let weightszero = initializeWeights dat8th 0
+    let weightsvsmall = initializeWeights dat8th 0.0000000000001
+    let weightstwo = initializeWeights dat8th 2
 
-    -- Print results for regular linear regression
-    putStrLn "Linear Regression"
-    print (M.transpose weightsLR)
-    print (errorCalc weightsLR (snd datfin) (fst datfin))
+    print$M.transpose weightszero
+    print$M.transpose weightsvsmall
+    print$M.transpose weightstwo
+    {--
+    weightsPLA <- pla weights dat 1000
+    print weightsPLA
+    putStrLn "PLA Ein"
+    print (errorCalc weightsPLA (snd dat) (fst dat))
+    putStrLn "PLA Eout"
+    print (errorCalc weightsPLA (snd dattest) (fst dattest))
 
-    -- Print results for regular gradient Descent
-    putStrLn "gradient Descent"
-    print (M.transpose weightsGD)
-    print (errorCalc weightsGD (snd datfin) (fst datfin))
+    weightsLRP <- linearRegression weights dat 1000
+    print weightsLRP
+    putStrLn "LRP Ein"
+    print (errorCalc weightsLRP (snd dat) (fst dat))
+    putStrLn "LRP Eout"
+    print (errorCalc weightsLRP (snd dattest) (fst dattest))
 
-    putStrLn "Stochastic gradient Descent"
-    print (M.transpose weightsSGD)
-    print (errorCalc weightsSGD (snd datfin) (fst datfin))
+    gradientDescentWeights <- gradientDescent weights dat 10
+    print gradientDescentWeights
+
+    print (M.multStd (snd dat) gradientDescentWeights)
+    print (fmap (\p -> log (1 - exp p)) (M.multStd (snd dat) gradientDescentWeights))
+    --Nans from ^
+    print (-(D.sum (fmap (\p -> log (1-exp p)) (M.multStd (snd dat) gradientDescentWeights)))) 
+    print (fromIntegral (nrows (fst dat)))
+    print (-(D.sum (fmap (\p -> log (1-exp p)) (M.multStd (snd dat) gradientDescentWeights))) / (fromIntegral (nrows (fst dat))))
+
+    putStrLn "gradient Descent Ein"
+    print (logisticErr gradientDescentWeights (snd dat) (fst dat))
+    putStrLn "gradient Descent Eout"
+    print (logisticErr gradientDescentWeights (snd dattest) (fst dattest))
+    
+    let dat3rd = polytransform2to3 dat
+    let datest3rd = polytransform2to3 dattest
+    let weights3rd = initializeWeights dat3rd
+    weightsPLA3rd <- pla weights3rd dat3rd 1000
+    print $ M.transpose weightsPLA3rd
+    putStrLn "PLA Ein"
+    print (errorCalc weightsPLA3rd (snd dat3rd) (fst dat3rd))
+    putStrLn "PLA Eout"
+    print (errorCalc weightsPLA3rd (snd datest3rd) (fst datest3rd))
+
+    weightsLRP3rd <- linearRegression weights3rd dat3rd 1000
+    print $ M.transpose weightsLRP3rd
+    putStrLn "LRP Ein"
+    print (errorCalc weightsLRP3rd (snd dat3rd) (fst dat3rd))
+    putStrLn "LRP Eout"
+    print (errorCalc weightsLRP3rd (snd datest3rd) (fst datest3rd))
+
+
+    gradientDescentWeights3rd <- gradientDescent weights3rd dat3rd 10
+    print $ M.transpose gradientDescentWeights3rd
+    putStrLn "gradient Descent Ein"
+    print (logisticErr gradientDescentWeights3rd (snd dat3rd) (fst dat3rd))
+    putStrLn "gradient Descent Eout"
+    print (logisticErr gradientDescentWeights3rd (snd datest3rd) (fst datest3rd))
+--}
