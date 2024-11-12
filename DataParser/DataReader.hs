@@ -38,6 +38,7 @@ excellent. These data were kindly made available by the neural network
 group at AT&T research labs (thanks to Yann Le Cunn).
 
 --}
+
 -- Function to read the file and parse the data
 readImages :: FilePath -> IO (Matrix Double, Matrix Double)
 readImages filePath = do
@@ -71,6 +72,7 @@ parseLine line =
         pixels = M.fromList 16 16 (Prelude.tail values)
     in ([number], features pixels)
 
+-- function to read in a line and return the features and the label, +1 for ones and -1 for all other numbers
 parseLineOneAll :: String -> Maybe ([Double], [Double])
 parseLineOneAll line =
     let values = Prelude.map read $ words line :: [Double]
@@ -81,7 +83,7 @@ parseLineOneAll line =
         _ ->Just ([-1], features pixels)
 
 
--- Function to read the file and parse the data
+-- Function to read the file and parse the data into a test set and a training set, with a sample size samplen for the training set and labels of 1 for ones and -1 for all other numbers
 readImagesOneAll :: FilePath -> Int -> IO ((Matrix Double, Matrix Double), (Matrix Double, Matrix Double))
 readImagesOneAll filePath samplen = do
     contents <- readFile filePath
@@ -107,9 +109,16 @@ readImagesOneAll filePath samplen = do
 -- Generate a list of unique random indices
 generateUniqueRandomIndices :: Int -> Int -> IO [Int]
 generateUniqueRandomIndices n maxIndex = do
-    indices <- sequence $ replicate n (randomRIO (0, maxIndex - 1))
-    return $ take n $ nub indices
+    generate n []
+  where
+    generate 0 acc = return acc
+    generate n acc = do
+        idx <- randomRIO (0, maxIndex - 1)
+        if idx `elem` acc
+            then generate n acc
+            else generate (n - 1) (idx : acc)
 
+--print the results of the parse into a file
 printResults ::  (Matrix Double, Matrix Double) -> FilePath ->IO ()
 printResults (labels, matrices) outfilePath = do 
     let one = [(a, b) | (a, b) <- zip (M.toList labels) (M.toLists matrices), a == 1]
@@ -124,12 +133,12 @@ printResults (labels, matrices) outfilePath = do
 take in some data and a degree to turn it into and return that degree.
 Φ3(x) = (x1, x2, x1^2, x1x2, x2^2, x1^3, (x1^2)x2, x1(x2^2), x2^3),
 --}
-
 polytransform2to3 :: (Matrix Double, Matrix Double) -> (Matrix Double, Matrix Double)
 polytransform2to3 (ys, xs) = 
     let (nys, nxs) = polytransform2to3list (M.toLists ys) (M.toLists xs)
     in (M.fromLists nys, M.fromLists nxs)
 
+--helper function for above
 polytransform2to3list :: [[Double]] -> [[Double]] -> ([[Double]], [[Double]])
 polytransform2to3list [] _ = ([], [])
 polytransform2to3list _ [] = ([], [])
@@ -140,6 +149,7 @@ polytransform2to3list (y:ys) (x:xs) = case x of
         in (y:yn, third:xn)
     _ -> error "not second order"
 
+--function to normalize the features of a matrix
 normalizeFeatures :: (Matrix Double, Matrix Double) -> (Matrix Double, Matrix Double)
 normalizeFeatures (labels, features) =
     let numCols = ncols features
@@ -156,6 +166,7 @@ normalizeFeatures (labels, features) =
             normalizeValue x = (x - shift) / scale
         in mapCol (\_ x -> normalizeValue x) colIdx mat
 
+-- Pseudo-inverse function to calculate the weights for linear regression
 pseudoInverse :: Matrix Double -> Double -> Matrix Double
 pseudoInverse matrix 0=
     case inverse (multStd (M.transpose matrix) matrix) of
@@ -181,8 +192,8 @@ legendre k x = ((2 * fromIntegral k - 1) * x * legendre (k - 1) x - (fromIntegra
 -- Orthogonal polynomial transform using Legendre polynomials
 polyTransformOrthogonal :: Int -> (Matrix Double, Matrix Double) -> (Matrix Double, Matrix Double)
 polyTransformOrthogonal degree (ys, xs) = 
-    let (nys, nxs) = polyTransformOrthogonalList degree (M.toLists ys) (M.toLists xs)
-    in (M.fromLists nys, M.fromLists nxs)
+    let (nys, nxs) = polyTransformOrthogonalList degree (toLists ys) (toLists xs)
+    in (fromLists nys, fromLists nxs)
 
 polyTransformOrthogonalList :: Int -> [[Double]] -> [[Double]] -> ([[Double]], [[Double]])
 polyTransformOrthogonalList _ [] _ = ([], [])
@@ -192,7 +203,7 @@ polyTransformOrthogonalList degree (y:ys) (x:xs) = case x of
         let (yn, xn) = polyTransformOrthogonalList degree ys xs 
             transformed = orthogonalFeatures degree x1 x2
         in (y:yn, transformed:xn)
-    _ -> error "not second order"
+    _ -> error "Expected exactly two features with a bias variable"
 
 -- Generate orthogonal features using Legendre polynomials up to the given degree
 orthogonalFeatures :: Int -> Double -> Double -> [Double]
@@ -205,5 +216,5 @@ legendreFeatures 1 x1 x2 = [legendre 1 x1, legendre 1 x2]
 legendreFeatures d x1 x2 = 
     let l1 = legendre d x1
         l2 = legendre d x2
-        crossTerms = [legendre i x1 * legendre (d - i) x2 | i <- [0..d]]
+        crossTerms = [legendre i x1 * legendre (d - i) x2 | i <- [1..(d-1)]]
     in l1 : l2 : crossTerms

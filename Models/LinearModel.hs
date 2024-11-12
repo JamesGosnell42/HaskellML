@@ -1,4 +1,5 @@
 module Models.LinearModel where
+import Models.Util 
 import Data.Matrix as M 
 import Data.Vector as V
 import Data.List as D
@@ -12,16 +13,8 @@ import GHC.Parser.Lexer (xset)
 
 
 
-errorCalc :: Matrix Double -> Matrix Double -> Matrix Double -> Double
-errorCalc w xs y =
-    let predictions = M.multStd xs w
-        incorect = M.elementwise (\a b -> if signum a == signum b then 0 else 1) predictions y
-        misclassifiedCount = D.sum incorect
-    in (fromIntegral misclassifiedCount / fromIntegral (D.length y)) * 100
-
-
--- Linear classification using the pocket algorithm
-pla :: Matrix Double -> (Matrix Double, Matrix Double) -> Int -> IO (Matrix Double)
+-- perceptron learning algorithm with pocket
+pla :: Model 
 pla w (y, xs) 0 = return w
 pla w (y, xs) iterations = do
     let predictions = M.multStd xs w
@@ -37,15 +30,14 @@ pla w (y, xs) iterations = do
     
     future <- pla newW (y, xs) (iterations - 1)
     
-    -- Debug: Print the current and future error rates
     let currentError = errorCalc w xs y
     let futureError = errorCalc future xs y
-
     if currentError < futureError
         then return w
         else return future
 
-linearRegression:: Matrix Double -> (Matrix Double, Matrix Double) -> Int -> IO (Matrix Double)
+--linear regresion classification with pocket algorithm
+linearRegression:: Model 
 linearRegression w (y, xs) 0 = return w
 linearRegression w (y, xs) iterations = do
     let predictions = M.multStd xs w
@@ -55,7 +47,6 @@ linearRegression w (y, xs) iterations = do
 
     future <- linearRegression newW (y, xs) (iterations - 1)
     
-    -- Debug: Print the current and future error rates
     let currentError = errorCalc w xs y
     let futureError = errorCalc future xs y
     if currentError < futureError

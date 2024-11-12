@@ -2,82 +2,77 @@
 module Main where
 import Data.Matrix as M
 import Data.List as D
+import Data.Ord (comparing)
 import Models.LinearModel
 import Models.LogisticModel
+import Models.Util
 import DataParser.DataReader
+
+crossValidationRegression :: Data -> Data -> Double -> (Double, Double)
+crossValidationRegression dat@(y, _) (ty, tx) lambda = 
+    let errors = map (\i -> runRegression dat lambda i) [1..nrows y]
+        avgError = (D.sum errors) / (fromIntegral (D.length errors))
+        weights = initializeWeights dat lambda
+    in (avgError, errorCalc weights tx ty)
+
+runRegression :: Data -> Double -> Int -> Double
+runRegression (y, x) lambda rowidx = 
+    let testy = M.rowVector (getRow rowidx y)
+        testx = M.rowVector (getRow rowidx x)
+        trainy = removeRow rowidx y
+        trainx = removeRow rowidx x
+        weights = initializeWeights (trainy, trainx) lambda
+    in errorCalc weights testx testy
+
+runLambdas:: Data -> Data ->[Double] -> ([Double], [Double])
+runLambdas dat dattest lambdas = 
+    let errors = map (\l -> crossValidationRegression dat dattest l) lambdas
+    in unzip errors
 
 main :: IO ()
 main = do
 
-
     (datnn, dattest) <- readImagesOneAll "ZipDigitsFull.txt" 300
-    let dat8th = polyTransformOrthogonal 8 (normalizeFeatures datnn)
-    let dattest8th =polyTransformOrthogonal 8 (normalizeFeatures dattest)
-    
-    printResults dat8th "resultsFullOrder.txt" 
-    printResults dattest8th "resultsFullOrdertest.txt" 
+    let nomdat = normalizeFeatures datnn
+    let nomdattest = normalizeFeatures dattest
+    printResults nomdat "normalizedData.txt"
+    printResults nomdattest "normalizedTestData.txt"
+    let dat8th = polyTransformOrthogonal 8 nomdat
+    let dattest8th = polyTransformOrthogonal 8  nomdattest
+    printResults dat8th "resultsFullOrder.txt"
+    printResults dattest8th "resultsFullOrderTest.txt"
 
-    print ("dat8th row #: " D.++ (show$nrows$snd dat8th) D.++ " dat8th col #: " D.++ (show$ncols$snd dat8th) )
-    
-    let weightszero = initializeWeights dat8th 0
-    let weightsvsmall = initializeWeights dat8th 0.0000000000001
-    let weightstwo = initializeWeights dat8th 2
+    print ("dat8th row #: " ++ (show $ nrows $ snd dat8th) ++ " dat8th col #: " ++ (show $ ncols $ snd dat8th))
 
-    print$M.transpose weightszero
-    print$M.transpose weightsvsmall
-    print$M.transpose weightstwo
+
+    let weights37 = initializeWeights dat8th 0.2
+    print$M.transpose weights37
+    print "Regression 0.2 Etest: "
+    print (errorCalc weights37 (snd dattest8th) (fst dattest8th))
     {--
-    weightsPLA <- pla weights dat 1000
-    print weightsPLA
-    putStrLn "PLA Ein"
-    print (errorCalc weightsPLA (snd dat) (fst dat))
-    putStrLn "PLA Eout"
-    print (errorCalc weightsPLA (snd dattest) (fst dattest))
-
-    weightsLRP <- linearRegression weights dat 1000
-    print weightsLRP
-    putStrLn "LRP Ein"
-    print (errorCalc weightsLRP (snd dat) (fst dat))
-    putStrLn "LRP Eout"
-    print (errorCalc weightsLRP (snd dattest) (fst dattest))
-
-    gradientDescentWeights <- gradientDescent weights dat 10
-    print gradientDescentWeights
-
-    print (M.multStd (snd dat) gradientDescentWeights)
-    print (fmap (\p -> log (1 - exp p)) (M.multStd (snd dat) gradientDescentWeights))
-    --Nans from ^
-    print (-(D.sum (fmap (\p -> log (1-exp p)) (M.multStd (snd dat) gradientDescentWeights)))) 
-    print (fromIntegral (nrows (fst dat)))
-    print (-(D.sum (fmap (\p -> log (1-exp p)) (M.multStd (snd dat) gradientDescentWeights))) / (fromIntegral (nrows (fst dat))))
-
-    putStrLn "gradient Descent Ein"
-    print (logisticErr gradientDescentWeights (snd dat) (fst dat))
-    putStrLn "gradient Descent Eout"
-    print (logisticErr gradientDescentWeights (snd dattest) (fst dattest))
     
-    let dat3rd = polytransform2to3 dat
-    let datest3rd = polytransform2to3 dattest
-    let weights3rd = initializeWeights dat3rd
-    weightsPLA3rd <- pla weights3rd dat3rd 1000
-    print $ M.transpose weightsPLA3rd
-    putStrLn "PLA Ein"
-    print (errorCalc weightsPLA3rd (snd dat3rd) (fst dat3rd))
-    putStrLn "PLA Eout"
-    print (errorCalc weightsPLA3rd (snd datest3rd) (fst datest3rd))
+    let weights = initializeWeights dat8th 0
+    print$M.transpose weights
+    print "Regression 0 Etest: "
+    print (errorCalc weights (snd dattest8th) (fst dattest8th))
 
-    weightsLRP3rd <- linearRegression weights3rd dat3rd 1000
-    print $ M.transpose weightsLRP3rd
-    putStrLn "LRP Ein"
-    print (errorCalc weightsLRP3rd (snd dat3rd) (fst dat3rd))
-    putStrLn "LRP Eout"
-    print (errorCalc weightsLRP3rd (snd datest3rd) (fst datest3rd))
+    let lambdas = [0, 0.1..4]
+    let (cverrors, testerrors) = runLambdas dat8th dattest8th lambdas 
+    let lambdaErrorPairs = zip lambdas cverrors
+    let (bestLambda, err) = minimumBy (comparing snd) lambdaErrorPairs
+    let weightsbest = initializeWeights dat8th bestLambda
 
-
-    gradientDescentWeights3rd <- gradientDescent weights3rd dat3rd 10
-    print $ M.transpose gradientDescentWeights3rd
-    putStrLn "gradient Descent Ein"
-    print (logisticErr gradientDescentWeights3rd (snd dat3rd) (fst dat3rd))
-    putStrLn "gradient Descent Eout"
-    print (logisticErr gradientDescentWeights3rd (snd datest3rd) (fst datest3rd))
---}
+    print$M.transpose weightsbest
+    print "Lambdas: "
+    print lambdas
+    print "CV errors: "
+    print cverrors
+    print "Test errors: "
+    print testerrors
+    print "Best Lambda: "
+    print bestLambda
+    print "Best Lambda Ecv: "
+    print err
+    print "Best Lambda Etest: "
+    print (errorCalc weightsbest (snd dattest8th) (fst dattest8th))
+    --}
