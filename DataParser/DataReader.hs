@@ -169,19 +169,19 @@ normalizeFeatures (labels, features) =
 -- Pseudo-inverse function to calculate the weights for linear regression
 pseudoInverse :: Matrix Double -> Double -> Matrix Double
 pseudoInverse matrix 0=
-    case inverse (multStd (M.transpose matrix) matrix) of
-        Right invMat -> multStd invMat (M.transpose matrix)
+    case inverse ((M.transpose matrix) * matrix) of
+        Right invMat -> invMat * (M.transpose matrix)
         Left err-> zero (ncols matrix) (nrows matrix)
 pseudoInverse matrix lambda=
-    case inverse (M.elementwise (+) (multStd (M.transpose matrix) matrix) (M.scaleMatrix lambda (identity (nrows matrix)))) of
-        Right invMat -> multStd invMat (M.transpose matrix)
+    case inverse (M.elementwise (+) ((M.transpose matrix) * matrix) (M.scaleMatrix lambda (identity (nrows matrix)))) of
+        Right invMat -> invMat * (M.transpose matrix)
         Left err-> zero (ncols matrix) (nrows matrix)
 
 -- Function to initialize weights using the pseudoinverse algorithm (w = (XTX)-1XTY)
 initializeWeights :: (Matrix Double, Matrix Double) -> Double -> Matrix Double
 initializeWeights (labels, matrices) lambda=
     let  xPseudoInv = pseudoInverse matrices lambda
-    in  multStd xPseudoInv labels
+    in   xPseudoInv * labels
 
 -- Calculate the k-th order Legendre polynomial at x
 legendre :: Int -> Double -> Double
