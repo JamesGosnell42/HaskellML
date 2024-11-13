@@ -16,7 +16,7 @@ errnum :: Matrix Double -> Matrix Double -> Matrix Double -> Matrix Double
 errnum w y x = 
     let 
         first = byrow (-y) x 
-        xw = M.multStd x w
+        xw = x * w
         neg_y_xw = M.elementwise (*) (-y) xw
         logisticres = fmap logistic neg_y_xw
         combined = byrow logisticres first

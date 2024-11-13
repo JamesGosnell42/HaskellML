@@ -17,7 +17,7 @@ import GHC.Parser.Lexer (xset)
 pla :: Model 
 pla w (y, xs) 0 = return w
 pla w (y, xs) iterations = do
-    let predictions = M.multStd xs w
+    let predictions = xs * w
     let incorect = M.elementwise (\a b -> signum a /= signum b) predictions y
     let misclassified = [(x, y_i) | (x, y_i, p) <- D.zip3 (M.toLists xs) (M.toList y) (M.toList incorect), p]
 
@@ -40,9 +40,9 @@ pla w (y, xs) iterations = do
 linearRegression:: Model 
 linearRegression w (y, xs) 0 = return w
 linearRegression w (y, xs) iterations = do
-    let predictions = M.multStd xs w
+    let predictions = M.multStd2 xs w
     let incorect = M.elementwise (\a b -> if signum a == signum b then 0 else 1) predictions y
-    let gradient = M.multStd (M.transpose xs) incorect
+    let gradient = (M.transpose xs) * incorect
     let newW = M.elementwise (-) w (scaleMatrix 0.01 gradient) -- Update weights with learning rate 0.01
 
     future <- linearRegression newW (y, xs) (iterations - 1)

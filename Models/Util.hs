@@ -17,14 +17,14 @@ type Weights = IO (Matrix Double)
 -- Cross-Entropy Loss Function for logistic error
 logisticErr :: Matrix Double -> Matrix Double -> Matrix Double -> Double
 logisticErr w x y = 
-    let predictions = M.multStd x w
+    let predictions = x * w
         logPredictions = fmap (\p -> log (1-exp p)) predictions
     in -(D.sum logPredictions) / (fromIntegral (nrows y))
 
 -- Error calculation for linear regression
 errorCalc :: Matrix Double -> Matrix Double -> Matrix Double -> Double
 errorCalc w xs y =
-    let predictions = M.multStd xs w
+    let predictions = M.multStd2 xs w
         incorect = M.elementwise (\a b -> if signum a == signum b then 0 else 1) predictions y
         misclassifiedCount = D.sum incorect
     in (fromIntegral misclassifiedCount / fromIntegral (D.length y)) * 100
@@ -69,4 +69,3 @@ removeRow :: Int -> Matrix Double -> Matrix Double
 removeRow 1 mat = submatrix 2 (nrows mat) 1 (ncols mat) mat
 removeRow rowidx mat = if rowidx == nrows mat then submatrix 1 (rowidx - 1) 1 (ncols mat) mat
     else submatrix 1 (rowidx - 1) 1 (ncols mat) mat <-> submatrix (rowidx + 1) (nrows mat) 1 (ncols mat) mat
-    

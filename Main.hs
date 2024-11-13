@@ -33,22 +33,27 @@ main :: IO ()
 main = do
 
     (datnn, dattest) <- readImagesOneAll "ZipDigitsFull.txt" 300
+
     let nomdat = normalizeFeatures datnn
     let nomdattest = normalizeFeatures dattest
+
     printResults nomdat "normalizedData.txt"
     printResults nomdattest "normalizedTestData.txt"
+
     let dat8th = polyTransformOrthogonal 8 nomdat
     let dattest8th = polyTransformOrthogonal 8  nomdattest
-    printResults dat8th "resultsFullOrder.txt"
-    printResults dattest8th "resultsFullOrderTest.txt"
-
-    print ("dat8th row #: " ++ (show $ nrows $ snd dat8th) ++ " dat8th col #: " ++ (show $ ncols $ snd dat8th))
 
 
-    let weights37 = initializeWeights dat8th 0.2
-    print$M.transpose weights37
-    print "Regression 0.2 Etest: "
-    print (errorCalc weights37 (snd dattest8th) (fst dattest8th))
+    let weights37 = initializeWeights nomdat 0.01
+    weightsfin <- pla weights37 nomdat 100
+    print$M.transpose weightsfin
+    
+    weightsfin2 <- linearRegression weights37 nomdat 100
+    print$M.transpose weightsfin2
+
+    let weights = initializeWeights dat8th 0
+    print$M.transpose weights
+
     {--
     
     let weights = initializeWeights dat8th 0
