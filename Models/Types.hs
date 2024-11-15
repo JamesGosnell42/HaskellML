@@ -1,11 +1,11 @@
 module Models.Types where
+import Data.Matrix as M
 
-newtype Coefficients =
-  Coefficients (Float, Float)
-  deriving (Show)
+-- type alias for data
+type Data = (Matrix Double, Matrix Double)
 
-newtype Example =
-  Example (Float, Float)
+-- Type alias for models
+type Model = Matrix Double -> Data -> Int -> Weights
 
-newtype TrainingSet =
-  TrainingSet [Example]
+-- Type alias for weights
+type Weights = IO (Matrix Double)

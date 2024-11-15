@@ -1,9 +1,12 @@
 module DataParser.DataReader where
-    
+import Models.Util 
+import Models.Types
+
 import Data.Matrix as M 
 import qualified Data.Vector as V
 import Data.List as D
 import Data.Foldable as F
+
 import Data.Maybe
 import System.IO
 import System.Random (randomRIO)
@@ -72,6 +75,8 @@ parseLine line =
         pixels = M.fromList 16 16 (Prelude.tail values)
     in ([number], features pixels)
 
+
+
 -- function to read in a line and return the features and the label, +1 for ones and -1 for all other numbers
 parseLineOneAll :: String -> Maybe ([Double], [Double])
 parseLineOneAll line =
@@ -81,8 +86,6 @@ parseLineOneAll line =
     in case number of
         1 -> Just ([1], features pixels)
         _ ->Just ([-1], features pixels)
-
-
 -- Function to read the file and parse the data into a test set and a training set, with a sample size samplen for the training set and labels of 1 for ones and -1 for all other numbers
 readImagesOneAll :: FilePath -> Int -> IO ((Matrix Double, Matrix Double), (Matrix Double, Matrix Double))
 readImagesOneAll filePath samplen = do
@@ -106,6 +109,8 @@ readImagesOneAll filePath samplen = do
 
     return ((fromLists sampleLabels, fromLists sampleMatrices), (fromLists remainingLabels, fromLists remainingMatrices))
 
+
+
 -- Generate a list of unique random indices
 generateUniqueRandomIndices :: Int -> Int -> IO [Int]
 generateUniqueRandomIndices n maxIndex = do
@@ -118,6 +123,7 @@ generateUniqueRandomIndices n maxIndex = do
             then generate n acc
             else generate (n - 1) (idx : acc)
 
+
 --print the results of the parse into a file
 printResults ::  (Matrix Double, Matrix Double) -> FilePath ->IO ()
 printResults (labels, matrices) outfilePath = do 
@@ -129,25 +135,6 @@ printResults (labels, matrices) outfilePath = do
     
     writeFile outfilePath (oneResults ++ otherResults)
 
-{--
-take in some data and a degree to turn it into and return that degree.
-Φ3(x) = (x1, x2, x1^2, x1x2, x2^2, x1^3, (x1^2)x2, x1(x2^2), x2^3),
---}
-polytransform2to3 :: (Matrix Double, Matrix Double) -> (Matrix Double, Matrix Double)
-polytransform2to3 (ys, xs) = 
-    let (nys, nxs) = polytransform2to3list (M.toLists ys) (M.toLists xs)
-    in (M.fromLists nys, M.fromLists nxs)
-
---helper function for above
-polytransform2to3list :: [[Double]] -> [[Double]] -> ([[Double]], [[Double]])
-polytransform2to3list [] _ = ([], [])
-polytransform2to3list _ [] = ([], [])
-polytransform2to3list (y:ys) (x:xs) = case x of
-    (1:x1:x2:[]) -> 
-        let (yn, xn) = polytransform2to3list ys xs 
-            third = [1, x1, x2, x1 * x1, x1 * x2, x2 * x2, x1 * x1 * x1, x1 * x1 * x2, x1 * x2 * x2, x2 * x2 * x2]
-        in (y:yn, third:xn)
-    _ -> error "not second order"
 
 --function to normalize the features of a matrix
 normalizeFeatures :: (Matrix Double, Matrix Double) -> (Matrix Double, Matrix Double)
@@ -165,23 +152,6 @@ normalizeFeatures (labels, features) =
             scale = (maxVal - minVal) / 2
             normalizeValue x = (x - shift) / scale
         in mapCol (\_ x -> normalizeValue x) colIdx mat
-
--- Pseudo-inverse function to calculate the weights for linear regression
-pseudoInverse :: Matrix Double -> Double -> Matrix Double
-pseudoInverse matrix 0=
-    case inverse ((M.transpose matrix) * matrix) of
-        Right invMat -> invMat * (M.transpose matrix)
-        Left err-> zero (ncols matrix) (nrows matrix)
-pseudoInverse matrix lambda=
-    case inverse (M.elementwise (+) ((M.transpose matrix) * matrix) (M.scaleMatrix lambda (identity (nrows matrix)))) of
-        Right invMat -> invMat * (M.transpose matrix)
-        Left err-> zero (ncols matrix) (nrows matrix)
-
--- Function to initialize weights using the pseudoinverse algorithm (w = (XTX)-1XTY)
-initializeWeights :: (Matrix Double, Matrix Double) -> Double -> Matrix Double
-initializeWeights (labels, matrices) lambda=
-    let  xPseudoInv = pseudoInverse matrices lambda
-    in   xPseudoInv * labels
 
 -- Calculate the k-th order Legendre polynomial at x
 legendre :: Int -> Double -> Double

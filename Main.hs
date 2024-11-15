@@ -1,18 +1,21 @@
 {-# OPTIONS_GHC -Wall #-}
 module Main where
-import Data.Matrix as M
-import Data.List as D
-import Data.Ord (comparing)
 import Models.LinearModel
 import Models.LogisticModel
 import Models.Util
+import Models.Types
 import DataParser.DataReader
+
+import Data.Matrix as M
+import Data.List as D
+
+
 
 crossValidationRegression :: Data -> Data -> Double -> (Double, Double)
 crossValidationRegression dat@(y, _) (ty, tx) lambda = 
     let errors = map (\i -> runRegression dat lambda i) [1..nrows y]
         avgError = (D.sum errors) / (fromIntegral (D.length errors))
-        weights = initializeWeights dat lambda
+        weights = pseudoInverse dat lambda
     in (avgError, errorCalc weights tx ty)
 
 runRegression :: Data -> Double -> Int -> Double
@@ -21,7 +24,7 @@ runRegression (y, x) lambda rowidx =
         testx = M.rowVector (getRow rowidx x)
         trainy = removeRow rowidx y
         trainx = removeRow rowidx x
-        weights = initializeWeights (trainy, trainx) lambda
+        weights = pseudoInverse (trainy, trainx) lambda
     in errorCalc weights testx testy
 
 runLambdas:: Data -> Data ->[Double] -> ([Double], [Double])
@@ -44,15 +47,21 @@ main = do
     let dattest8th = polyTransformOrthogonal 8  nomdattest
 
 
-    let weights37 = initializeWeights nomdat 0.01
+    let weights37 = pseudoInverse nomdat 0.01
     weightsfin <- pla weights37 nomdat 100
     print$M.transpose weightsfin
+    print (errorCalc weightsfin (snd nomdat) (fst nomdat))
+    print (errorCalc weightsfin (snd nomdattest) (fst nomdattest))
     
     weightsfin2 <- linearRegression weights37 nomdat 100
     print$M.transpose weightsfin2
+    print (errorCalc weightsfin2 (snd nomdat) (fst nomdat))
+    print (errorCalc weightsfin2 (snd nomdattest) (fst nomdattest))
 
-    let weights = initializeWeights dat8th 0
+    let weights = pseudoInverse dat8th 0
     print$M.transpose weights
+    print (errorCalc weights (snd dat8th) (fst dat8th))
+    print (errorCalc weights (snd dattest8th) (fst dattest8th))
 
     {--
     

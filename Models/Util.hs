@@ -1,18 +1,9 @@
 module Models.Util where
-
+import Models.Types
 import Data.Matrix as M
 import Data.List as D
-import DataParser.DataReader
+
 import           Data.Maybe
-
--- type alias for data
-type Data = (Matrix Double, Matrix Double)
-
--- Type alias for models
-type Model = Matrix Double -> Data -> Int -> Weights
-
--- Type alias for weights
-type Weights = IO (Matrix Double)
 
 -- Cross-Entropy Loss Function for logistic error
 logisticErr :: Matrix Double -> Matrix Double -> Matrix Double -> Double
@@ -50,7 +41,7 @@ sumColumns m =
 crossValidation:: Data -> Model -> Double-> Int-> IO (Matrix Double, Double)
 crossValidation dat@(y, x) model lambda iterations = do
     errors <- mapM (\i -> runModel dat model lambda iterations i) [1..nrows y]
-    finalmodel <- model (initializeWeights dat lambda) dat iterations
+    finalmodel <- model x dat iterations
     let avgError = (D.sum errors) / (fromIntegral (D.length errors))
     return (finalmodel, avgError)
 
@@ -61,7 +52,7 @@ runModel (y, x) model lambda iterations rowidx = do
         textx =  M.rowVector (getRow rowidx x )
         trainy = removeRow rowidx y
         trainx = removeRow rowidx x
-    weights <- model (initializeWeights (trainy, trainx) lambda) (trainy, trainx) iterations
+    weights <- model trainx (trainy, trainx) iterations
     return$errorCalc weights textx testy
 
 --helper function for removing the test row from the training matrix

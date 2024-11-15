@@ -1,15 +1,13 @@
 module Models.LinearModel where
 import Models.Util 
+import Models.Types
+
 import Data.Matrix as M 
 import Data.Vector as V
 import Data.List as D
-import Models.Types
+
 import Debug.Trace
 import System.Random (randomRIO)
-import Control.Monad (when)
-import GHC.Enum (Enum(pred))
-import GHC.CmmToAsm.AArch64.Instr (x0)
-import GHC.Parser.Lexer (xset)
 
 
 
@@ -53,3 +51,10 @@ linearRegression w (y, xs) iterations = do
         then return w
         else return future
 
+-- Function to initialize weights using the pseudoinverse algorithm (w = (XTX)-1XTY)
+pseudoInverse :: (Matrix Double, Matrix Double) -> Double -> Matrix Double
+pseudoInverse (labels, matrix) lambda =
+    let  xPseudoInv = case inverse (M.elementwise (+) ((M.transpose matrix) * matrix) (M.scaleMatrix lambda (identity (nrows matrix)))) of 
+                        Right invMat -> invMat * (M.transpose matrix)
+                        Left err-> zero (ncols matrix) (nrows matrix)
+    in   xPseudoInv * labels

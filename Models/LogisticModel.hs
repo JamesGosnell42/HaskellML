@@ -1,10 +1,11 @@
 module Models.LogisticModel where
+import Models.Util 
+import Models.Types
+
 import Data.Matrix as M 
 import Data.Vector as V
 import Data.List as D
-import Models.Util
-import Models.Types
-import Debug.Trace
+
 import System.Random (randomRIO)
 
 -- Logistic function
@@ -12,8 +13,8 @@ logistic :: Double -> Double
 logistic n = 1 / (1 + exp (-n))
 
 -- calculate: gradient of Error = -yx Theta(-y wTx) 
-errnum :: Matrix Double -> Matrix Double -> Matrix Double -> Matrix Double
-errnum w y x = 
+gradient :: Matrix Double -> Matrix Double -> Matrix Double -> Matrix Double
+gradient w y x = 
     let 
         first = byrow (-y) x 
         xw = x * w
@@ -27,7 +28,7 @@ gradientDescent :: Model
 gradientDescent w _ 0 = return w
 gradientDescent w (y, x) iterations = do
     let stepSize = 0.01  -- Learning rate
-        errn = M.scaleMatrix (-stepSize) (errnum w y x)
+        errn = M.scaleMatrix (-stepSize) (gradient w y x)
         updatedW = M.elementwise (+) w errn
     gradientDescent updatedW (y, x) (iterations - 1)
 
@@ -40,6 +41,6 @@ stochasticGradientDescent w (y, x) iterations = do
     idx <- randomRIO (1, numRows)
     let x_sel = M.rowVector (M.getRow idx x)
         y_sel = M.rowVector (M.getRow idx y)
-        errn = M.scaleMatrix (-stepSize) (errnum w y_sel x_sel)
+        errn = M.scaleMatrix (-stepSize) (gradient w y_sel x_sel)
         updatedW = M.elementwise (+) w errn
     stochasticGradientDescent updatedW (y, x) (iterations - 1)
