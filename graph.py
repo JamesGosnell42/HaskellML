@@ -1,5 +1,78 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.special import expit  # Sigmoid function
+
+
+
+def safe_log(p):
+    result = np.log(1 - np.exp(p))
+    if np.isnan(result):
+        return 0
+    return result
+
+def logistic_error(weights, x, y):
+    predictions = np.dot(x, weights)
+    log_predictions = np.vectorize(safe_log)(-y * predictions)
+    return -np.mean(log_predictions)
+
+def plot_logistic_regression(filename, title, weights):
+    x_values = []
+    y_values = []
+    labels = []
+
+    # Read the file and parse the data
+    with open(filename, 'r') as file:
+        for line in file:
+            line = line.strip()
+            if line:
+                try:
+                    line = line.strip('()')
+                    number_str, coords_str = line.split(',', 1)
+                    number = float(number_str.strip())
+                    
+                    coords_str = coords_str.strip('[]')
+                    one_str, x_str, y_str = map(str.strip, coords_str.split(','))
+
+                    x = float(x_str)
+                    y = float(y_str)
+
+                    x_values.append(x)
+                    y_values.append(y)
+                    labels.append(number)
+                except ValueError as e:
+                    print(f"Skipping line due to error: {line} - {e}")
+                except SyntaxError as e:
+                    print(f"Skipping line due to error in format: {line} - {e}")
+
+    x_values = np.array(x_values)
+    y_values = np.array(y_values)
+    labels = np.array(labels)
+
+    # Add intercept term to x_values
+    x_values_with_intercept = np.column_stack((np.ones(x_values.shape[0]), x_values, y_values))
+
+    # Calculate logistic error
+    error = logistic_error(weights, x_values_with_intercept, labels)
+    print(f"Logistic Error: {error:.2f}")
+
+    # Create plot
+    plt.figure(figsize=(10, 6))
+    plt.scatter(x_values[labels == 1], y_values[labels == 1], color='blue', label='1s', marker='o')
+    plt.scatter(x_values[labels == -1], y_values[labels == -1], color='red', label='-1s', marker='x')
+
+    # Plot decision boundary
+    x_min, x_max = x_values.min() - 0.5, x_values.max() + 0.5
+    y_min, y_max = y_values.min() - 0.5, y_values.max() + 0.5
+    xx, yy = np.meshgrid(np.linspace(x_min, x_max, 300), np.linspace(y_min, y_max, 300))
+    zz = predict_logistic(weights, np.c_[np.ones(xx.ravel().shape), xx.ravel(), yy.ravel()])
+    zz = zz.reshape(xx.shape)
+
+    plt.contour(xx, yy, zz, levels=[0.5], colors='green')
+    plt.xlabel('x')
+    plt.ylabel('y')
+    plt.legend()
+    plt.title(f'{title} (Error: {error:.2f}%)')
+    plt.show()
 
 def plot_data(filename, title, a, b, c):
     # Initialize lists to store x and y coordinates
@@ -498,12 +571,22 @@ if __name__ == '__main__':
   # File names
     normalized_data_file = 'normalizedData.txt'
     normalized_test_data_file = 'normalizedTestData.txt'
+
+    weights = np.array([-0.9715735498414493, -1.1940248553283757, -0.22468405169496117])
+    plot_logistic_regression(normalized_data_file, "gradientDescent 10 itr", weights)
+    plot_logistic_regression(normalized_test_data_file, "gradientDescent 10 itr", weights)
+
+    c, a, b = -0.9715735498414493, -1.1940248553283757, -0.22468405169496117
+    plot_data(normalized_data_file, "Linear Regression 2nd order", a, b, c)
+    plot_data(normalized_test_data_file, "Linear Regression 2nd order", a, b, c)
+
     c, a, b = -3.854440869674106, -6.433939164555101, 1.6543833824952823
     plot_data(normalized_data_file, "Linear Regression 2nd order", a, b, c)
     plot_data(normalized_test_data_file, "Linear Regression 2nd order", a, b, c)
     c, a, b =-0.9244408696741061,   -1.2191504321607296, 0.024335637065230866
     plot_data(normalized_data_file, "Linear Regression 2nd order", a, b, c)
     plot_data(normalized_test_data_file, "Linear Regression 2nd order", a, b, c)
+
     filename = "normalizedData.txt"  # Replace with your actual filename
     title = "8th Order Legendre Polynomial Decision Boundary lamba = 0 "
     coefficients = parse_input("11.885986407358683   -38.98645952415889   35.364207491196986   48.525624273337236    24.65655286608682   -77.26115743456144  -38.631116844864835   24.519825630906897   -93.75271149681267    107.5597564502562    41.24842958193097   0.8668471797681239   -30.89578764081576    93.78745473112731  -111.14221642416803   -9.880900548070969   2.6518409292660086  -27.086618532679065     70.3557883511933   -86.53224891136614    51.53562597089382   12.534306185949312 -0.48192857036008163    4.703775482249351    4.408145145685502   -46.70363078421796    80.53577475408554  -58.304210647118154 -0.24687191226384073  -0.2661635178705546 9.734415714032885e-3    7.360715689958498  -19.768273778208453   24.355416288689742   -17.16458455535486    6.148666430470627   0.8646608717567256  0.20137576563892512 -0.21766378133032818  -2.3314872129213917    3.552110068267951    7.309827081770621  -22.272581048044962   20.794667538287516    -8.04337400117317")

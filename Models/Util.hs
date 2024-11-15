@@ -5,16 +5,22 @@ import Data.List as D
 
 import           Data.Maybe
 
--- Cross-Entropy Loss Function for logistic error
-logisticErr :: Matrix Double -> Matrix Double -> Matrix Double -> Double
-logisticErr w x y = 
-    let predictions = x * w
-        logPredictions = fmap (\p -> log (1-exp p)) predictions
+-- Function to check if a value is NaN and replace it with 0 if it is
+safeLog :: Double -> Double
+safeLog p = 
+    let result = log (1 - exp p)
+    in if isNaN result then 0 else result
+
+-- Logistic error
+logisticErr :: Matrix Double -> Data -> Double
+logisticErr w (y, x) = 
+    let predictions = byrow (-y) (x * w)
+        logPredictions = fmap safeLog predictions
     in -(D.sum logPredictions) / (fromIntegral (nrows y))
 
 -- Error calculation for linear regression
-errorCalc :: Matrix Double -> Matrix Double -> Matrix Double -> Double
-errorCalc w xs y =
+errorCalc :: Matrix Double -> Data-> Double
+errorCalc w (y, xs) =
     let predictions = M.multStd2 xs w
         incorect = M.elementwise (\a b -> if signum a == signum b then 0 else 1) predictions y
         misclassifiedCount = D.sum incorect
@@ -53,7 +59,7 @@ runModel (y, x) model lambda iterations rowidx = do
         trainy = removeRow rowidx y
         trainx = removeRow rowidx x
     weights <- model trainx (trainy, trainx) iterations
-    return$errorCalc weights textx testy
+    return$errorCalc weights (trainy, trainx)
 
 --helper function for removing the test row from the training matrix
 removeRow :: Int -> Matrix Double -> Matrix Double

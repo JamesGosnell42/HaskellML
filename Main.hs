@@ -16,7 +16,7 @@ crossValidationRegression dat@(y, _) (ty, tx) lambda =
     let errors = map (\i -> runRegression dat lambda i) [1..nrows y]
         avgError = (D.sum errors) / (fromIntegral (D.length errors))
         weights = pseudoInverse dat lambda
-    in (avgError, errorCalc weights tx ty)
+    in (avgError, errorCalc weights (ty, tx))
 
 runRegression :: Data -> Double -> Int -> Double
 runRegression (y, x) lambda rowidx = 
@@ -25,7 +25,7 @@ runRegression (y, x) lambda rowidx =
         trainy = removeRow rowidx y
         trainx = removeRow rowidx x
         weights = pseudoInverse (trainy, trainx) lambda
-    in errorCalc weights testx testy
+    in errorCalc weights (testy, testx)
 
 runLambdas:: Data -> Data ->[Double] -> ([Double], [Double])
 runLambdas dat dattest lambdas = 
@@ -46,22 +46,37 @@ main = do
     let dat8th = polyTransformOrthogonal 8 nomdat
     let dattest8th = polyTransformOrthogonal 8  nomdattest
 
-
+    print "pseudoInverse 0.01"
     let weights37 = pseudoInverse nomdat 0.01
     weightsfin <- pla weights37 nomdat 100
     print$M.transpose weightsfin
-    print (errorCalc weightsfin (snd nomdat) (fst nomdat))
-    print (errorCalc weightsfin (snd nomdattest) (fst nomdattest))
+    print (errorCalc weightsfin nomdat)
+    print (errorCalc weightsfin nomdattest)
     
+    print "linearRegression 100 itr"
     weightsfin2 <- linearRegression weights37 nomdat 100
     print$M.transpose weightsfin2
-    print (errorCalc weightsfin2 (snd nomdat) (fst nomdat))
-    print (errorCalc weightsfin2 (snd nomdattest) (fst nomdattest))
+    print (errorCalc weightsfin2 nomdat)
+    print (errorCalc weightsfin2 nomdattest)
 
+    print "gradientDescent 10 itr"
+    weightsfin3 <- gradientDescent weights37 nomdat 10
+    print$M.transpose weightsfin3
+
+    print (logisticErr weightsfin3 nomdat)
+    print (logisticErr weightsfin3 nomdattest)
+
+    print "stochasticGradientDescent 100 itr"
+    weightsfin4 <- stochasticGradientDescent weights37 nomdat 100
+    print$M.transpose weightsfin4
+    print (logisticErr weightsfin4 nomdat)
+    print (logisticErr weightsfin4 nomdattest)
+
+    print "pseudoInverse 8th 0"
     let weights = pseudoInverse dat8th 0
     print$M.transpose weights
-    print (errorCalc weights (snd dat8th) (fst dat8th))
-    print (errorCalc weights (snd dattest8th) (fst dattest8th))
+    print (errorCalc weights dat8th)
+    print (errorCalc weights dattest8th)
 
     {--
     

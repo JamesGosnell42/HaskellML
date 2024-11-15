@@ -28,8 +28,8 @@ pla w (y, xs) iterations = do
     
     future <- pla newW (y, xs) (iterations - 1)
     
-    let currentError = errorCalc w xs y
-    let futureError = errorCalc future xs y
+    let currentError = errorCalc w (y, xs)
+    let futureError = errorCalc future (y, xs)
     if currentError < futureError
         then return w
         else return future
@@ -45,8 +45,8 @@ linearRegression w (y, xs) iterations = do
 
     future <- linearRegression newW (y, xs) (iterations - 1)
     
-    let currentError = errorCalc w xs y
-    let futureError = errorCalc future xs y
+    let currentError = errorCalc w (y, xs)
+    let futureError = errorCalc future (y, xs)
     if currentError < futureError
         then return w
         else return future
