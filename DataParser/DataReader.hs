@@ -10,6 +10,7 @@ import Data.Foldable as F
 import Data.Maybe
 import System.IO
 import System.Random (randomRIO)
+import Control.Parallel.Strategies
 
 {--
 Normalized handwritten digits, automatically
@@ -86,6 +87,7 @@ parseLineOneAll line =
     in case number of
         1 -> Just ([1], features pixels)
         _ ->Just ([-1], features pixels)
+        
 -- Function to read the file and parse the data into a test set and a training set, with a sample size samplen for the training set and labels of 1 for ones and -1 for all other numbers
 readImagesOneAll :: FilePath -> Int -> IO ((Matrix Double, Matrix Double), (Matrix Double, Matrix Double))
 readImagesOneAll filePath samplen = do

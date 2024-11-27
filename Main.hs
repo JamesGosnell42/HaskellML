@@ -2,83 +2,83 @@
 module Main where
 import Models.LinearModel
 import Models.LogisticModel
+import Models.KNN
 import Models.Util
 import Models.Types
 import DataParser.DataReader
 
+import Control.Concurrent.Async (mapConcurrently)
 import Data.Matrix as M
 import Data.List as D
 
+scale::Double-> Double
+scale x = 2/(sqrt x)
 
 
-crossValidationRegression :: Data -> Data -> Double -> (Double, Double)
-crossValidationRegression dat@(y, _) (ty, tx) lambda = 
-    let errors = map (\i -> runRegression dat lambda i) [1..nrows y]
-        avgError = (D.sum errors) / (fromIntegral (D.length errors))
-        weights = pseudoInverse dat lambda
-    in (avgError, errorCalc weights (ty, tx))
+-- Cross-validation function for finding Ecv and weights of a model
+crossValidationknn :: Data -> Double -> IO Double
+crossValidationknn dat@(y, x) k = do
+    errors <- mapM (\i -> runModelknn dat k i) [1, 11..nrows y]
+    let avgError = (D.sum errors) / (fromIntegral (D.length errors))
+    return avgError
 
-runRegression :: Data -> Double -> Int -> Double
-runRegression (y, x) lambda rowidx = 
-    let testy = M.rowVector (getRow rowidx y)
-        testx = M.rowVector (getRow rowidx x)
-        trainy = removeRow rowidx y
-        trainx = removeRow rowidx x
-        weights = pseudoInverse (trainy, trainx) lambda
-    in errorCalc weights (testy, testx)
+-- Helper function for running model with cross-validation
+runModelknn :: Data -> Double -> Int -> IO Double
+runModelknn (y, x) k rowidx = do
+    let rowend = if (rowidx + 10 > nrows y) then nrows y else rowidx + 10
+    let testy = submatrix rowidx rowend 1 (ncols y) y
+        testx = submatrix rowidx rowend 1 (ncols x) x
+        trainy = removeRows rowidx rowend y
+        trainx = removeRows rowidx rowend x
+    return $ kNNerror (trainy, trainx) (testy, testx) ((round k) :: Int)
 
-runLambdas:: Data -> Data ->[Double] -> ([Double], [Double])
-runLambdas dat dattest lambdas = 
-    let errors = map (\l -> crossValidationRegression dat dattest l) lambdas
-    in unzip errors
+-- Cross-validation function for finding Ecv and weights of a model
+crossValidationrbf :: Data -> Double -> IO Double
+crossValidationrbf dat@(y, x) k = do
+    errors <- mapM (\i -> runModelrbf dat k i) [1, 11..nrows y]
+    let avgError = (D.sum errors) / (fromIntegral (D.length errors))
+    return avgError
+
+-- Helper function for running model with cross-validation
+runModelrbf :: Data -> Double -> Int -> IO Double
+runModelrbf (y, x) k rowidx = do
+    let rowend = if (rowidx + 10 > nrows y) then nrows y else rowidx + 10
+    let testy = submatrix rowidx rowend 1 (ncols y) y
+        testx = submatrix rowidx rowend 1 (ncols x) x
+        trainy = removeRows rowidx rowend y
+        trainx = removeRows rowidx rowend x
+
+    (centers, weights, sigma) <- rbfModel ((round k) :: Int) (scale k) (trainy, trainx) 100
+    let preditions = predictRBF (centers, weights, sigma) testx
+    let incorect = M.elementwise (\a b -> if signum a == signum b then 0 else 1) preditions testy
+    let misclassifiedCount = sum $ M.toList incorect
+    return ((fromIntegral misclassifiedCount / fromIntegral (M.nrows testy)) * 100)
+
 
 main :: IO ()
 main = do
-
     (datnn, dattest) <- readImagesOneAll "ZipDigitsFull.txt" 300
+    printResults datnn "normalizedData.txt"
+    printResults dattest "normalizedDataTest.txt"
+    --print "KNN"
+    --erro1 <- mapM (crossValidationknn datnn) [1..50]
+    --print$D.zip [1..50] erro1
 
-    let nomdat = normalizeFeatures datnn
-    let nomdattest = normalizeFeatures dattest
+    print "RBF"
+    (centers, weights, sigma) <- rbfModel 53 (scale 53) datnn 100
+    print centers 
+    print weights 
+    print sigma
 
-    printResults nomdat "normalizedData.txt"
-    printResults nomdattest "normalizedTestData.txt"
-
-    let dat8th = polyTransformOrthogonal 8 nomdat
-    let dattest8th = polyTransformOrthogonal 8  nomdattest
-
-    print "pseudoInverse 0.01"
-    let weights37 = pseudoInverse nomdat 0.01
-    weightsfin <- pla weights37 nomdat 100
-    print$M.transpose weightsfin
-    print (errorCalc weightsfin nomdat)
-    print (errorCalc weightsfin nomdattest)
+{--
+    (centers, weights, sigma) <- rbfModel 100 (scale 10) datnn 100
     
-    print "linearRegression 100 itr"
-    weightsfin2 <- linearRegression weights37 nomdat 100
-    print$M.transpose weightsfin2
-    print (errorCalc weightsfin2 nomdat)
-    print (errorCalc weightsfin2 nomdattest)
-
-    print "gradientDescent 10 itr"
-    weightsfin3 <- gradientDescent weights37 nomdat 10
-    print$M.transpose weightsfin3
-
-    print (logisticErr weightsfin3 nomdat)
-    print (logisticErr weightsfin3 nomdattest)
-
-    print "stochasticGradientDescent 100 itr"
-    weightsfin4 <- stochasticGradientDescent weights37 nomdat 100
-    print$M.transpose weightsfin4
-    print (logisticErr weightsfin4 nomdat)
-    print (logisticErr weightsfin4 nomdattest)
-
-    print "pseudoInverse 8th 0"
-    let weights = pseudoInverse dat8th 0
-    print$M.transpose weights
-    print (errorCalc weights dat8th)
-    print (errorCalc weights dattest8th)
-
-    {--
+    let preditions = predictRBF (centers, weights, sigma) (snd datnn)
+    
+    let incorect = M.elementwise (\a b -> if signum a == signum b then 0 else 1) preditions (fst datnn)
+    let misclassifiedCount = sum $ M.toList incorect
+    print ((fromIntegral misclassifiedCount / fromIntegral (M.nrows (fst datnn))) * 100)
+    
     
     let weights = initializeWeights dat8th 0
     print$M.transpose weights

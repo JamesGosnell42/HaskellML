@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.special import expit  # Sigmoid function
-
+from scipy.spatial import distance
 
 
 def safe_log(p):
@@ -567,30 +567,384 @@ def plot_errors(glambda, cverr, testerr):
     plt.grid(True)
     plt.show()
 
+
+def parse_and_plot_points(points_str, title):
+    # Remove parentheses and split the string into individual points
+    points_str = points_str.strip('()')
+    points_list = points_str.split('),(')
+    
+    # Initialize lists to store x and y coordinates
+    x_values = []
+    y_values = []
+
+    # Parse each point and extract x and y coordinates
+    for point in points_list:
+        x_str, y_str = point.split(',')
+        x_values.append(float(x_str))
+        y_values.append(float(y_str))
+
+    # Plot the points
+    plt.scatter(x_values, y_values, color='blue', label='Points')
+    plt.xlabel('X')
+    plt.ylabel('Y')
+    plt.title(title)
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+def parse_file(filename):
+    x_values = []
+    y_values = []
+    labels = []
+
+    with open(filename, 'r') as file:
+        for line in file:
+            line = line.strip()
+            if line:  # Ensure the line is not empty
+                try:
+                    # Remove parentheses and split the line into number and coordinates
+                    line = line.strip('()')
+                    number_str, coords_str = line.split(',', 1)  # Split at the first comma
+                    number = float(number_str.strip())
+                    
+                    # Remove brackets and convert coordinates to a list
+                    coords_str = coords_str.strip('[]')
+                    one_str, x_str, y_str = map(str.strip, coords_str.split(','))  # Split by comma and strip
+                    x, y = x_str, y_str
+                    if x_str.find('e') != -1:
+                        resx, eval = map(float, x_str.split('e'))
+                        x = resx * 10**eval
+                    else:
+                        x = float(x)
+
+                    if y.find('e') != -1:
+                        resy, eval = map(float, y.split('e'))
+                        y = resy * 10**eval
+                    else:
+                        y = float(y)
+
+                    # Append the values to the respective lists
+                    x_values.append(x)
+                    y_values.append(y)
+                    labels.append(number)
+                except ValueError as e:
+                    print(f"Skipping line due to error: {line} - {e}")
+                except SyntaxError as e:
+                    print(f"Skipping line due to error in format: {line} - {e}")
+
+    return np.array(x_values), np.array(y_values), np.array(labels)
+
+import matplotlib.pyplot as plt
+import numpy as np
+
+def parse_file(filename):
+    x_values = []
+    y_values = []
+    labels = []
+
+    with open(filename, 'r') as file:
+        for line in file:
+            line = line.strip()
+            if line:  # Ensure the line is not empty
+                try:
+                    # Remove parentheses and split the line into number and coordinates
+                    line = line.strip('()')
+                    number_str, coords_str = line.split(',', 1)  # Split at the first comma
+                    number = float(number_str.strip())
+                    
+                    # Remove brackets and convert coordinates to a list
+                    coords_str = coords_str.strip('[]')
+                    one_str, x_str, y_str = map(str.strip, coords_str.split(','))  # Split by comma and strip
+                    x, y = x_str, y_str
+                    if x_str.find('e') != -1:
+                        resx, eval = map(float, x_str.split('e'))
+                        x = resx * 10**eval
+                    else:
+                        x = float(x)
+
+                    if y.find('e') != -1:
+                        resy, eval = map(float, y.split('e'))
+                        y = resy * 10**eval
+                    else:
+                        y = float(y)
+
+                    # Append the values to the respective lists
+                    x_values.append(x)
+                    y_values.append(y)
+                    labels.append(number)
+                except ValueError as e:
+                    print(f"Skipping line due to error: {line} - {e}")
+                except SyntaxError as e:
+                    print(f"Skipping line due to error in format: {line} - {e}")
+
+    return np.array(x_values), np.array(y_values), np.array(labels)
+
+def parse_input(input_str):
+    lines = input_str.strip().split('\n')
+    centers = []
+    weights = []
+    sigma = None
+
+    parsing_centers = False
+    parsing_weights = False
+    for line in lines:
+        line = line.strip()
+        if line.startswith('centers = ['):
+            parsing_centers = True
+            parsing_weights = False
+            continue
+        elif line.startswith('weights = ['):
+            parsing_centers = False
+            parsing_weights = True
+            continue
+        elif line.startswith('sigma = '):
+            sigma = float(line.split('=')[1].strip())
+            continue
+        elif parsing_centers and line.startswith('['):
+            values = line.strip('[],').split(',')
+            parsed_values = []
+            for value in values:
+                value = value.strip()  # Remove leading and trailing spaces
+                if 'e' in value:
+                    num, exp = map(float, value.split('e'))
+                    parsed_values.append(num * 10**exp)
+                else:
+                    parsed_values.append(float(value))
+            centers.append(parsed_values[1:])  # Remove the bias variable
+        elif parsing_weights and line and line != ']':
+            value = line.strip().replace(',', '')  # Remove commas
+            if 'e' in value:
+                num, exp = map(float, value.split('e'))
+                weights.append(num * 10**exp)
+            else:
+                weights.append(float(value))
+
+    return np.array(centers), np.array(weights).flatten(), sigma
+
+def rbf_kernel(x, c, sigma):
+    return np.exp(-np.linalg.norm(x - c)**2 / (2 * sigma**2))
+
+def compute_rbf_kernel(centers, features, sigma):
+    kernel_matrix = np.zeros((features.shape[0], centers.shape[0]))
+    for i, feature in enumerate(features):
+        for j, center in enumerate(centers):
+            kernel_matrix[i, j] = rbf_kernel(feature, center, sigma)
+    return kernel_matrix
+
+def rbf_classify(test_points, centers, weights, sigma):
+    kernel_matrix = compute_rbf_kernel(centers, test_points, sigma)
+    predictions = np.dot(kernel_matrix, weights)
+    return np.where(predictions > 0, 1, -1)  # Classify as 1 if prediction >= 0, else -1
+
+def classify_and_plot_rbf(data_file, centers, weights, sigma):
+    x_values, y_values, labels = parse_file(data_file)
+    test_points = np.column_stack((x_values, y_values))
+
+    predictions = rbf_classify(test_points, centers, weights, sigma)
+
+    # Calculate the error
+    error = np.mean(predictions != labels)
+    print(f"Classification error: {error}")
+
+    # Plot the data with predictions
+    colors = np.where(predictions == labels, predictions, 0)  # Use 0 for misclassified points
+    plt.scatter(x_values, y_values, c=colors, cmap='coolwarm', marker='x', label='RBF Predictions')
+    plt.colorbar(label='Prediction Value')
+
+    # Plot the centers with their weight radius
+    centers_x = centers[:, 0]
+    centers_y = centers[:, 1]
+    for i, (cx, cy) in enumerate(zip(centers_x, centers_y)):
+        plt.scatter(cx, cy, c='black', marker='o')
+        circle = plt.Circle((cx, cy), sigma, color='black', fill=False)
+        plt.gca().add_artist(circle)
+        plt.scatter(cx, cy, c='blue' if weights[i] > 0 else 'red', marker='o', edgecolor='black')
+
+    plt.xlabel('X')
+    plt.ylabel('Y')
+    plt.title('RBF Classification')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+def knn_classify(test_points, train_points, train_labels, k):
+    predictions = []
+    for test_point in test_points:
+        distances = distance.cdist([test_point], train_points, 'euclidean')[0]
+        nearest_indices = np.argsort(distances)[:k]
+        nearest_labels = train_labels[nearest_indices]
+        prediction = np.sign(np.sum(nearest_labels))
+        predictions.append(prediction)
+    return np.array(predictions)
+
+def classify_and_plot_knn(training_file, testing_file, k):
+    # Parse the training data
+    train_x, train_y, train_labels = parse_file(training_file)
+    train_points = np.column_stack((train_x, train_y))
+
+    # Parse the testing data
+    test_x, test_y, test_labels = parse_file(testing_file)
+    test_points = np.column_stack((test_x, test_y))
+
+    # Classify the test points
+    predictions = knn_classify(test_points, train_points, train_labels, k)
+
+    # Calculate the error
+    error = np.mean(predictions != test_labels)
+    print(f"Classification error: {error}")
+
+    # Plot the data with predictions
+    colors = np.where(predictions == test_labels, predictions, 0)  # Use 0 for misclassified points
+    plt.scatter(test_x, test_y, c=colors, cmap='coolwarm', marker='x', label='kNN Predictions')
+    plt.colorbar(label='Prediction Value')
+
+    # Plot the training points
+    plt.scatter(train_x, train_y, c=train_labels, cmap='coolwarm', marker='o', edgecolor='black', label='Training Points')
+
+    plt.xlabel('X')
+    plt.ylabel('Y')
+    plt.title('kNN Classification')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
 if __name__ == '__main__':
-  # File names
+    # File names
     normalized_data_file = 'normalizedData.txt'
-    normalized_test_data_file = 'normalizedTestData.txt'
+    normalized_test_data_file = 'normalizedDataTest.txt'
 
-    weights = np.array([-0.9715735498414493, -1.1940248553283757, -0.22468405169496117])
-    plot_logistic_regression(normalized_data_file, "gradientDescent 10 itr", weights)
-    plot_logistic_regression(normalized_test_data_file, "gradientDescent 10 itr", weights)
+    points_str = "(1,2.4545454545454546),(2,2.757575757575758),(3,1.8484848484848486),(4,2.757575757575758),(5,3.060606060606061),(6,2.757575757575758),(7,3.0303030303030307),(8,3.333333333333334),(9,3.333333333333334),(10,3.93939393939394),(11,4.242424242424243),(12,4.242424242424243),(13,4.545454545454546),(14,4.848484848484849),(15,4.848484848484849),(16,5.151515151515152),(17,5.151515151515152),(18,5.151515151515152),(19,5.454545454545455),(20,5.757575757575759),(21,6.666666666666668),(22,7.575757575757577),(23,7.87878787878788),(24,7.87878787878788),(25,7.87878787878788),(26,7.87878787878788),(27,7.87878787878788),(28,8.484848484848486),(29,8.484848484848486),(30,8.787878787878789),(31,8.787878787878789),(32,9.090909090909092),(33,9.090909090909092),(34,9.090909090909092),(35,9.090909090909092),(36,9.696969696969695),(37,10.0),(38,10.0),(39,10.0),(40,10.0),(41,10.909090909090908),(42,11.212121212121211),(43,11.212121212121211),(44,11.212121212121211),(45,11.515151515151514),(46,11.515151515151514),(47,11.818181818181817),(48,12.12121212121212),(49,12.424242424242424),(50,13.03030303030303)"
+    parse_and_plot_points(points_str, "kNN k vs Error")
 
-    c, a, b = -0.9715735498414493, -1.1940248553283757, -0.22468405169496117
-    plot_data(normalized_data_file, "Linear Regression 2nd order", a, b, c)
-    plot_data(normalized_test_data_file, "Linear Regression 2nd order", a, b, c)
+    classify_and_plot_knn(normalized_data_file, normalized_test_data_file, 3)
 
-    c, a, b = -3.854440869674106, -6.433939164555101, 1.6543833824952823
-    plot_data(normalized_data_file, "Linear Regression 2nd order", a, b, c)
-    plot_data(normalized_test_data_file, "Linear Regression 2nd order", a, b, c)
-    c, a, b =-0.9244408696741061,   -1.2191504321607296, 0.024335637065230866
-    plot_data(normalized_data_file, "Linear Regression 2nd order", a, b, c)
-    plot_data(normalized_test_data_file, "Linear Regression 2nd order", a, b, c)
+    points_str = "(1,17.909090909090903),(3,10.93939393939394),(5,10.93939393939394),(7,7.272727272727274),(9,7.303030303030304),(11,6.666666666666668),(13,6.696969696969698),(15,6.3939393939393945),(17,7.272727272727274),(19,6.060606060606061),(21,7.272727272727274),(23,7.575757575757577),(25,7.272727272727274),(27,6.969696969696971),(29,6.666666666666668),(31,7.303030303030304),(33,4.545454545454546),(35,5.151515151515152),(37,5.454545454545455),(39,4.848484848484849),(41,5.151515151515152),(43,4.545454545454546),(45,5.757575757575759),(47,3.636363636363637),(49,3.93939393939394),(51,4.242424242424243),(53,3.333333333333334),(55,3.636363636363637),(57,4.242424242424243),(59,3.93939393939394),(61,5.151515151515152),(63,3.93939393939394),(65,4.545454545454546),(67,6.060606060606061),(69,5.151515151515152),(71,5.757575757575759),(73,5.757575757575759),(75,5.454545454545455),(77,5.757575757575759),(79,7.272727272727274),(81,6.060606060606061),(83,8.484848484848486),(85,7.87878787878788),(87,5.454545454545455),(89,6.666666666666667),(91,7.606060606060607),(93,8.212121212121213),(95,8.212121212121213),(97,7.90909090909091),(99,7.606060606060607)"
+    parse_and_plot_points(points_str, "RBF k vs Error")
 
+  
     filename = "normalizedData.txt"  # Replace with your actual filename
     title = "8th Order Legendre Polynomial Decision Boundary lamba = 0 "
     coefficients = parse_input("11.885986407358683   -38.98645952415889   35.364207491196986   48.525624273337236    24.65655286608682   -77.26115743456144  -38.631116844864835   24.519825630906897   -93.75271149681267    107.5597564502562    41.24842958193097   0.8668471797681239   -30.89578764081576    93.78745473112731  -111.14221642416803   -9.880900548070969   2.6518409292660086  -27.086618532679065     70.3557883511933   -86.53224891136614    51.53562597089382   12.534306185949312 -0.48192857036008163    4.703775482249351    4.408145145685502   -46.70363078421796    80.53577475408554  -58.304210647118154 -0.24687191226384073  -0.2661635178705546 9.734415714032885e-3    7.360715689958498  -19.768273778208453   24.355416288689742   -17.16458455535486    6.148666430470627   0.8646608717567256  0.20137576563892512 -0.21766378133032818  -2.3314872129213917    3.552110068267951    7.309827081770621  -22.272581048044962   20.794667538287516    -8.04337400117317")
-    plot_data8th(filename, title, *coefficients)
-    plot_data8th(normalized_test_data_file, title, *coefficients)
+    #plot_data8th(filename, title, *coefficients)
+    #plot_data8th(normalized_test_data_file, title, *coefficients)
+
+    input_str = """
+    centers = [
+        [1.0, 43.333333333333336, -97.86844444444445],
+        [1.0, 45.0, 37.805],
+        [1.0, 3.25, -208.45725000000002],
+        [1.0, 26.0, -34.3825],
+        [1.0, 58.0, -163.0765],
+        [1.0, 4.5, -152.29825],
+        [1.0, 65.0, -66.52250000000001],
+        [1.0, 64.66666666666667, -123.39033333333333],
+        [1.0, 64.0, -22.933],
+        [1.0, 40.0, -206.58100000000002],
+        [1.0, 34.0, -59.757857142857155],
+        [1.0, 32.8421052631579, -132.26268421052632],
+        [1.0, 23.583333333333332, -174.91141666666667],
+        [1.0, 33.5, -1.8619999999999992],
+        [1.0, 17.25, -117.8645],
+        [1.0, 60.333333333333336, -101.29050000000001],
+        [1.0, 3.8333333333333335, -179.8088333333333],
+        [1.0, 55.4, -47.394999999999996],
+        [1.0, 54.8, -83.9876],
+        [1.0, 25.25, -160.27325],
+        [1.0, 27.916666666666668, -98.82616666666668],
+        [1.0, 62.75, -142.801],
+        [1.0, 41.0, -163.32779999999997],
+        [1.0, 17.666666666666668, -132.42583333333334],
+        [1.0, 18.0, -201.96200000000002],
+        [1.0, 52.0, -113.83749999999999],
+        [1.0, 37.666666666666664, -83.66011111111112],
+        [1.0, 51.5, -8.711500000000001],
+        [1.0, 71.0, -44.141999999999996],
+        [1.0, 84.0, -135.925],
+        [1.0, 26.444444444444443, -122.22677777777777],
+        [1.0, 26.666666666666668, -51.27366666666668],
+        [1.0, 49.0, -60.31733333333333],
+        [1.0, 10.875, -166.58049999999997],
+        [1.0, 43.111111111111114, -46.059111111111115],
+        [1.0, 80.0, -75.90899999999999],
+        [1.0, 51.666666666666664, -25.74366666666667],
+        [1.0, 33.9, -147.60375000000002],
+        [1.0, 49.5, -129.51725],
+        [1.0, 76.0, -106.97000000000001],
+        [1.0, 25.0, -75.64700000000002],
+        [1.0, 17.25, -188.345125],
+        [1.0, 43.0, -12.310999999999998],
+        [1.0, 3.6, -137.7858],
+        [1.0, 24.0, -213.7955],
+        [1.0, 47.2, -143.2878],
+        [1.0, 48.333333333333336, -70.892],
+        [1.0, 2.2, -193.98829999999998],
+        [1.0, 22.875, -145.12775],
+        [1.0, 49.666666666666664, -104.40883333333333],
+        [1.0, 38.95, -116.32369999999999],
+        [1.0, 16.333333333333332, -104.49166666666666],
+        [1.0, 68.0, -88.537]
+    ]
+    weights = [
+        -9.372564251714353e-23,
+        -0.9900990099009901,
+        2.9383352329661204e-7,
+        -1.3233090383683663e-59,
+        -1.5548822231700656e-44,
+        8.488517062026785e-24,
+        -1.9728780639153856e-91,
+        -9.92745512961038e-38,
+        -0.9900990099009901,
+        -0.9900990099009901,
+        -0.9900991411156261,
+        -1.4673558209114602e-3,
+        -8.322383613795612e-7,
+        -6.535886271140841e-87,
+        9.427428387553828e-25,
+        -4.006853216013094,
+        7.767107568514572e-4,
+        -5.64338486686404e-17,
+        -7.3454431822012065e-40,
+        -5.812365919437675e-4,
+        -2.0798461361787455e-2,
+        -1.038142709072964,
+        -2.8974935519327173e-25,
+        -1.9802017196632243e-8,
+        -0.9900990099009901,
+        -3.562499057344893e-2,
+        -3.331272207968721e-19,
+        -5.212076350214798e-36,
+        -0.9900990099009901,
+        -0.9900990099009901,
+        -2.6713466428709948e-36,
+        -1.4596607766825756e-19,
+        -2.4474972228077383e-27,
+        1.5538952456371482,
+        -0.3863970636206811,
+        -0.9900990099009901,
+        -4.86472770764573e-13,
+        -0.35910066983387423,
+        -5.3416569274259295e-8,
+        -0.9900990099009901,
+        -3.3421451270938507e-16,
+        -2.520350909637586e-3,
+        -1.6736533260769867e-12,
+        0.15700155196260943,
+        -6.922268701072305e-71,
+        -7.374808530228488e-77,
+        -1.8126544812021938e-40,
+        2.8617444479971214e-2,
+        -5.905705146712817e-4,
+        -3.4303961962213325,
+        -7.744474208422625e-8,
+        -7.392683052283323e-28,
+        -0.9900990099009901
+    ]
+    sigma = 0.27472112789737807
+    """
+    centers, weights, sigma = parse_input(input_str)
+    print(centers)
+    print(weights)
+    print(sigma)
+    classify_and_plot_rbf(normalized_test_data_file, centers, weights, sigma)
 
     exit(0)
